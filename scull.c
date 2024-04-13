@@ -84,6 +84,48 @@ out:
 	return retval;
 }
 
+ssize_t scull_write(struct file *filp, char __user *buff, size_t count, loff_t *f_pos) {
+	struct scull_dev *dev = filp->private_data;
+	struct scull_qset *dtpt;
+	int quantum = dev->quantum, qset = dev->qset;
+	int item_size = quantum * qset;
+
+	int item, s_pos, q_pos, rest;
+	ssize_t ret_val = -ENOMEM;
+
+	if (down_interruptible(&dev->sem)) return -ERESTARTSYS;
+	item = (long)*offp / itemsize;
+	rest = (long)*offp % itemsize;
+	s_pos = rest / quantum;
+	q_pos = rest % quantum;
+
+	dtpt = scull_follow(dev, item);
+	if (dtpt == NULL) goto out;
+	if (!dtpt->data) {
+		dtpt->data = kmalloc(qset * sizeof(char *), GFP_KERNEL);
+		if (!dtpt->data) goto out;
+		memset(dptpt->data, 0, qset * sizeof(char *));
+	}
+
+	if (!dtpt->data[s_pos]) {
+		dtpt->data[s_pos] = kmalloc(quantum, GFP_KERNEL);
+		if (!dtpt->data[s_pos]) goto out;
+	}
+
+	if (count > quantum - q_pos) count = quantum - q_pos;
+	if (copy_from_user(dtpt->data[s_pos] + q_pos, buf, count)) {
+		retval = -EFAULT;
+		goto out;
+	}
+
+	*f_pos += count;
+	retval = count;
+	if (dev->size < *f_pos) dev->size = *f_pos;
+out:
+	up(&dev->sem);
+	return retval;
+}
+
 void scull_setup_cdev(struct scull_dev *dev, int index) {
 	int err, devno = MKDEV(scull_major, scull_minor + index);
 	struct file_operations scull_fopsj = {
